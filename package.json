@@ -1,0 +1,25 @@
+{
+  "name": "agent-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' --no-warnings src/index.ts",
+    "dev": "npx @langchain/langgraph-cli dev --no-browser"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.0.0",
+    "@langchain/langgraph": "^1.0.0",
+    "@langchain/langgraph-sdk": "^1.5.4",
+    "@langchain/openai": "^1.0.0",
+    "@types/uuid": "^10.0.0",
+    "dotenv": "^16.4.0",
+    "langchain": "1.2.10",
+    "openai": "^6.16.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}
