@@ -11,6 +11,7 @@
     "@langchain/langgraph": "^1.0.0",
     "@langchain/langgraph-sdk": "^1.5.4",
     "@langchain/openai": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.4",
     "@types/uuid": "^10.0.0",
     "dotenv": "^16.4.0",
     "langchain": "1.2.10",

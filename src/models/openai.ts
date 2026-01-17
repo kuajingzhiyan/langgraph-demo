@@ -1,6 +1,6 @@
 // src/models/openai.ts
 import OpenAI from "openai";
-import { BaseMessage, AIMessage, HumanMessage } from "@langchain/core/messages";
+import { BaseMessage, AIMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { getWriter, LangGraphRunnableConfig } from "@langchain/langgraph";
 
 // 将 LangChain 消息转换为 OpenAI 格式
@@ -16,7 +16,32 @@ function convertToOpenAIMessages(messages: BaseMessage[]): OpenAI.ChatCompletion
           .map((c) => c.text)
           .join("")
         : (msg.content as string);
-      return { role: "assistant" as const, content };
+
+      const result: OpenAI.ChatCompletionAssistantMessageParam = {
+        role: "assistant" as const,
+        content,
+      };
+
+      // 添加 tool_calls 支持
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        result.tool_calls = msg.tool_calls.map((tc) => ({
+          id: tc.id!,
+          type: "function" as const,
+          function: {
+            name: tc.name,
+            arguments: JSON.stringify(tc.args),
+          },
+        }));
+      }
+
+      return result;
+    } else if (msg instanceof ToolMessage) {
+      // 处理工具响应消息
+      return {
+        role: "tool" as const,
+        content: msg.content as string,
+        tool_call_id: msg.tool_call_id!,
+      };
     } else {
       return { role: "system" as const, content: msg.content as string };
     }
@@ -26,7 +51,8 @@ function convertToOpenAIMessages(messages: BaseMessage[]): OpenAI.ChatCompletion
 // 使用 OpenAI 生成回复
 export async function generateWithOpenAI(
   messages: BaseMessage[],
-  config: LangGraphRunnableConfig
+  config: LangGraphRunnableConfig,
+  tools?: OpenAI.ChatCompletionTool[]
 ) {
   const client = new OpenAI({
     baseURL: process.env.OPENAI_BASE_URL,
@@ -42,10 +68,12 @@ export async function generateWithOpenAI(
     model: modelName,
     messages: openaiMessages,
     stream: true,
+    tools: tools && tools.length > 0 ? tools : undefined,
   });
 
   let reasoningContent = "";
   let textContent = "";
+  const toolCallsMap: Record<number, any> = {};
 
   for await (const chunk of response) {
     const delta = chunk.choices[0]?.delta as any;
@@ -73,11 +101,43 @@ export async function generateWithOpenAI(
         });
       }
     }
+
+    // 处理 tool_calls 流式数据
+    if (delta?.tool_calls) {
+      for (const toolCallDelta of delta.tool_calls) {
+        const index = toolCallDelta.index;
+        if (!toolCallsMap[index]) {
+          toolCallsMap[index] = {
+            id: toolCallDelta.id || "",
+            type: "function" as const,
+            function: {
+              name: toolCallDelta.function?.name || "",
+              arguments: toolCallDelta.function?.arguments || "",
+            },
+          };
+        } else {
+          if (toolCallDelta.function?.arguments) {
+            toolCallsMap[index].function.arguments += toolCallDelta.function.arguments;
+          }
+        }
+      }
+    }
   }
+
+  // 构建 tool_calls 数组（如果有）
+  const toolCallsArray = Object.values(toolCallsMap);
+  const formattedToolCalls = toolCallsArray.length > 0
+    ? toolCallsArray.map((tc) => ({
+        name: tc.function.name,
+        args: JSON.parse(tc.function.arguments),
+        id: tc.id,
+      }))
+    : undefined;
 
   return new AIMessage({
     id: messageId,
     content: textContent,
+    tool_calls: formattedToolCalls,
     additional_kwargs: {
       reasoning_content: reasoningContent || undefined,
     },

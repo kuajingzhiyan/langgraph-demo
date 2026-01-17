@@ -24,5 +24,6 @@ Thumbs.db
 *.swo
 
 # Test artifacts
-response_before
-response_after
+response_*
+
+mcp-service.json
